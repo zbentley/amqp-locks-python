@@ -23,16 +23,17 @@ class SingleChannelConnection(object):
 
     def clear_channel(self):
         self._channel = None
-        try:
-            self._channel.close()
-        except:
-            pass
-
-        try:
-            self.connection.close()
-        except pika.exceptions.ConnectionClosed as e:
-            if e.args[0] != 302:  # CONNECTION_FORCED
-                raise
+        if self._channel.is_open:
+            try:
+                self._channel.close()
+            except:
+                pass
+        if self.connection.is_open:
+            try:
+                self.connection.close()
+            except pika.exceptions.ConnectionClosed as e:
+                if e.args[0] != 302:  # CONNECTION_FORCED
+                    raise
 
     channel = property(get_channel, set_channel, clear_channel)
 

@@ -7,7 +7,7 @@ class Mutex(rabbitlock.connection.SingleChannelConnection):
         self.name = name
         self.parameters = parameters
         self.paranoid = paranoid
-        self.locks_held = {}
+        self._clear_held_locks()
         self.release_on_destroy = release_on_destroy
         super().__init__(parameters)
 
@@ -21,29 +21,45 @@ class Mutex(rabbitlock.connection.SingleChannelConnection):
                 "x-max-length": 0,
             }
         )
-        self.locks_held[self.name] = True
+        self._add_held_lock(0)
+        return True
+
+    def _add_held_lock(self, num=0):
+        self.locks_held[num] = True
+
+    def _remove_held_lock(self, num=0):
+        del (self.locks_held[num])
+
+    def _clear_held_locks(self):
+        self.locks_held = {}
+
+    def _has_lock(self, num=0):
+        return num in self.locks_held
 
     # Clear locks on reset
     def clear_channel(self):
-        self.locks_held = {}
+        self._clear_held_locks()
         super().clear_channel()
+
+    def _publish(self, name=""):
+        self.publish(
+            exchange="",
+            body="",
+            routing_key=self.name + name,
+            mandatory=True,
+            properties=pika.BasicProperties(delivery_mode=1)
+        )
+        # TODO no route handling, confirmation success/failures
 
     def ensure_acquired(self):
         success = False
         try:
             if self.paranoid:
-                self._acquire_mutex()
-            elif self.locks_held[self.name]:
-                self.publish(
-                    exchange="",
-                    body="",
-                    routing_key=self.name,
-                    mandatory=True,
-                    properties=pika.BasicProperties(delivery_mode=1)
-                )
+                success = self._acquire_mutex()
+            elif self._has_lock(0):
+                success = self._publish()
             else:
-                self._acquire_mutex()
-            success = True
+                success = self._acquire_mutex()
         except pika.exceptions.ConnectionClosed as e:
             if e.args[0] == 302:  # CONNECTION_FORCED
                 self.ensure_released()
@@ -64,6 +80,9 @@ class Mutex(rabbitlock.connection.SingleChannelConnection):
                 self.clear_channel()
             except pika.exceptions.ConnectionClosed as e2:
                 print("Destroy: got something that should be handled: " + repr(e2))
+        finally:
+            if self.paranoid:
+                self.clear_channel()
 
     def __del__(self):
         if self.release_on_destroy:
