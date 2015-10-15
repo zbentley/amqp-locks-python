@@ -1,6 +1,7 @@
-from single_channel_connection import SingleChannelConnection
+import rabbitlock.connection
 import pika
-class Mutex(SingleChannelConnection):
+
+class Mutex(rabbitlock.connection.SingleChannelConnection):
 	def __init__(self, name, parameters, paranoid=True, release_on_destroy=False):
 		self.name = name
 		self.parameters = parameters

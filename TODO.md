@@ -1,0 +1,5 @@
+- Docker RabbitMQ
+- Packageify so it can be installed via pip
+- Semaphore
+- Tests
+- Type annotation (p3 "typing", p3 "accepts"?)
