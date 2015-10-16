@@ -2,7 +2,7 @@ import rabbitlock.connection
 import pika
 
 
-class Mutex(rabbitlock.connection.SingleChannelConnection):
+class _InternalMutex(rabbitlock.connection.SingleChannelConnection):
     def __init__(self, name, parameters, paranoid=True, release_on_destroy=False):
         self.name = name
         self.parameters = parameters
@@ -51,7 +51,7 @@ class Mutex(rabbitlock.connection.SingleChannelConnection):
         )
         # TODO no route handling, confirmation success/failures
 
-    def ensure_acquired(self):
+    def _ensure_mutex_acquired(self):
         success = False
         try:
             if self.paranoid:
@@ -72,7 +72,7 @@ class Mutex(rabbitlock.connection.SingleChannelConnection):
                 raise
         return success
 
-    def ensure_released(self):
+    def _ensure_mutex_released(self):
         try:
             self.delete_queue(queue=self.name)
         except pika.exceptions.ConnectionClosed as e:
@@ -86,4 +86,4 @@ class Mutex(rabbitlock.connection.SingleChannelConnection):
 
     def __del__(self):
         if self.release_on_destroy:
-            self.ensure_released()
+            self._ensure_mutex_released()
