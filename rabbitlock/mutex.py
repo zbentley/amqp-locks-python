@@ -1,8 +1,8 @@
-import rabbitlock.connection
+import rabbitlock._connection
 import pika
 
 
-class _InternalMutex(rabbitlock.connection.SingleChannelConnection):
+class _InternalMutex(rabbitlock._connection._SingleChannelConnection):
     def __init__(self, name, parameters, paranoid=True, release_on_destroy=False):
         self.name = name
         self.parameters = parameters
@@ -12,7 +12,7 @@ class _InternalMutex(rabbitlock.connection.SingleChannelConnection):
         super().__init__(parameters)
 
     def _acquire_mutex(self):
-        self.declare_queue(
+        self._channel.queue_declare(
             queue=self.name,
             durable=False,
             exclusive=True,
@@ -37,19 +37,9 @@ class _InternalMutex(rabbitlock.connection.SingleChannelConnection):
         return num in self.locks_held
 
     # Clear locks on reset
-    def clear_channel(self):
+    def _clear_channel(self):
         self._clear_held_locks()
-        super().clear_channel()
-
-    def _publish(self, name=""):
-        self.publish(
-            exchange="",
-            body="",
-            routing_key=self.name + name,
-            mandatory=True,
-            properties=pika.BasicProperties(delivery_mode=1)
-        )
-        # TODO no route handling, confirmation success/failures
+        super()._clear_channel()
 
     def _ensure_mutex_acquired(self):
         success = False
@@ -57,7 +47,7 @@ class _InternalMutex(rabbitlock.connection.SingleChannelConnection):
             if self.paranoid:
                 success = self._acquire_mutex()
             elif self._has_lock(0):
-                success = self._publish()
+                success = self._ping()
             else:
                 success = self._acquire_mutex()
         except pika.exceptions.ConnectionClosed as e:
@@ -72,17 +62,27 @@ class _InternalMutex(rabbitlock.connection.SingleChannelConnection):
                 raise
         return success
 
+    def _ping(self, name=""):
+        self._channel.basic_publish(
+            exchange="",
+            body="",
+            routing_key=self.name + name,
+            mandatory=True,
+            properties=pika.BasicProperties(delivery_mode=1)
+        )
+        # TODO no route handling, confirmation success/failures
+
     def _ensure_mutex_released(self):
         try:
-            self.delete_queue(queue=self.name)
+            self._channel.queue_delete(queue=self.name)
         except pika.exceptions.ConnectionClosed as e:
             try:
-                self.clear_channel()
+                self._clear_channel()
             except pika.exceptions.ConnectionClosed as e2:
                 print("Destroy: got something that should be handled: " + repr(e2))
         finally:
             if self.paranoid:
-                self.clear_channel()
+                self._clear_channel()
 
     def __del__(self):
         if self.release_on_destroy:
@@ -90,9 +90,5 @@ class _InternalMutex(rabbitlock.connection.SingleChannelConnection):
 
 
 class Mutex(_InternalMutex):
-
-    def ensure_acquired(self):
-        return self._ensure_mutex_acquired()
-
-    def ensure_released(self):
-        return self._ensure_mutex_released()
+    ensure_acquired = _InternalMutex._ensure_mutex_acquired
+    ensure_released = _InternalMutex._ensure_mutex_released

@@ -1,31 +1,31 @@
 import pika
 
 
-class SingleChannelConnection(object):
+class _SingleChannelConnection(object):
     def __init__(self, parameters):
-        self._channel = None
+        self._channel_internal = None
         self.parameters = parameters
-        self.get_channel()
+        self._get_channel()
 
-    def get_channel(self):
-        if self._channel is not None:
-            if not self._channel.is_open or not self.connection.is_open:
+    def _get_channel(self):
+        if self._channel_internal is not None:
+            if not self._channel_internal.is_open or not self.connection.is_open:
                 self.clear_channel()
-        if self._channel is None:
+        if self._channel_internal is None:
             self.connection = pika.BlockingConnection(self.parameters)
             self.set_channel(self.connection.channel())
-        return self._channel
+        return self._channel_internal
 
-    def set_channel(self, channel):
+    def _set_channel(self, channel):
         channel.confirm_delivery()
-        self._channel = channel
+        self._channel_internal = channel
         return channel
 
-    def clear_channel(self):
-        self._channel = None
-        if self._channel.is_open:
+    def _clear_channel(self):
+        self._channel_internal = None
+        if self._channel_internal.is_open:
             try:
-                self._channel.close()
+                self._channel_internal.close()
             except:
                 pass
         if self.connection.is_open:
@@ -35,13 +35,4 @@ class SingleChannelConnection(object):
                 if e.args[0] != 302:  # CONNECTION_FORCED
                     raise
 
-    channel = property(get_channel, set_channel, clear_channel)
-
-    def publish(self, *args, **kw):
-        return self.channel.basic_publish(*args, **kw)
-
-    def declare_queue(self, *args, **kw):
-        return self.channel.queue_declare(*args, **kw)
-
-    def delete_queue(self, *args, **kw):
-        return self.channel.queue_delete(*args, **kw)
+    _channel = property(_get_channel, _set_channel, _clear_channel)
