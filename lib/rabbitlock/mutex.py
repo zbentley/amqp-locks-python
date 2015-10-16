@@ -87,3 +87,12 @@ class _InternalMutex(rabbitlock.connection.SingleChannelConnection):
     def __del__(self):
         if self.release_on_destroy:
             self._ensure_mutex_released()
+
+
+class Mutex(_InternalMutex):
+
+    def ensure_acquired(self):
+        return self._ensure_mutex_acquired()
+
+    def ensure_released(self):
+        return self._ensure_mutex_released()
