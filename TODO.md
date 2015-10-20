@@ -1,5 +1,9 @@
-- Docker RabbitMQ
 - Packageify so it can be installed via pip
 - Semaphore
 - Tests
 - Type annotation (p3 "typing", p3 "accepts"?)
+- _ping: no route handling, confirmation success/failures
+- Semaphore can hold more than one slot
+- "Ensure X" support.
+- Debug logging
+- Overshoot support in GetMaxSemaphore. Because things go wrong.
