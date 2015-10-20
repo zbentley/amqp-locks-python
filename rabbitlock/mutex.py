@@ -1,8 +1,45 @@
-import rabbitlock._connection
 import pika
 
 
-class _InternalMutex(rabbitlock._connection._SingleChannelConnection):
+class _SingleChannelConnection(object):
+    def __init__(self, parameters):
+        self._channel_internal = None
+        self.parameters = parameters
+        self._get_channel()
+
+    def _get_channel(self):
+        if self._channel_internal is not None:
+            if not self._channel_internal.is_open or not self._connection.is_open:
+                self.clear_channel()
+        if self._channel_internal is None:
+            print("Connecting")
+            self._connection = pika.BlockingConnection(self.parameters)
+            self._set_channel(self._connection.channel())
+        return self._channel_internal
+
+    def _set_channel(self, channel):
+        channel.confirm_delivery()
+        self._channel_internal = channel
+        return channel
+
+    def _clear_channel(self):
+        if self._channel_internal is not None and self._channel_internal.is_open:
+            try:
+                self._channel_internal.close()
+            except:
+                pass
+            self._channel_internal = None
+        if self._connection is not None and self._connection.is_open:
+            try:
+                self._connection.close()
+            except pika.exceptions.ConnectionClosed as e:
+                if e.args[0] != 302:  # CONNECTION_FORCED
+                    raise
+
+    _channel = property(_get_channel, _set_channel, _clear_channel)
+
+
+class _InternalMutex(_SingleChannelConnection):
     def __init__(self, name, parameters, paranoid=True, release_on_destroy=False):
         self.name = name
         self.parameters = parameters
@@ -21,20 +58,20 @@ class _InternalMutex(rabbitlock._connection._SingleChannelConnection):
                 "x-max-length": 0,
             }
         )
-        self._add_held_lock(0)
+        self._add_held_lock()
         return True
 
     def _add_held_lock(self, num=0):
-        self.locks_held[num] = True
+        self._locks_held[num] = True
 
     def _remove_held_lock(self, num=0):
-        del (self.locks_held[num])
+        del (self._locks_held[num])
 
     def _clear_held_locks(self):
-        self.locks_held = {}
+        self._locks_held = {}
 
     def _has_lock(self, num=0):
-        return num in self.locks_held
+        return num in self._locks_held
 
     # Clear locks on reset
     def _clear_channel(self):
@@ -63,14 +100,13 @@ class _InternalMutex(rabbitlock._connection._SingleChannelConnection):
         return success
 
     def _ping(self, name=""):
-        self._channel.basic_publish(
+        return self._channel.basic_publish(
             exchange="",
             body="",
             routing_key=self.name + name,
             mandatory=True,
             properties=pika.BasicProperties(delivery_mode=1)
         )
-        # TODO no route handling, confirmation success/failures
 
     def _ensure_mutex_released(self):
         try:
