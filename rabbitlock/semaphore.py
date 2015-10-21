@@ -40,8 +40,6 @@ class Semaphore(rabbitlock.mutex._InternalMutex):
             if self.paranoid and not self.slept:
                 self.slept = True
                 time.sleep(10.0 / random.randrange(75))
-            # TODO logging, maximum recursion count.
-            # TODO optimize: start trying to acquire at $eligible, only loop around if it doesn't exist.
             return self._acquire_semaphore()
         else:
             # In paranoid mode, re-verify lock ownership. This is done since
