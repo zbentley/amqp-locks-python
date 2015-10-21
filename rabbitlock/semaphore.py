@@ -10,16 +10,17 @@ class Semaphore(rabbitlock.mutex._InternalMutex):
     def _acquire_semaphore(self):
         eligible = 1
         while self._semaphore_exists(eligible):
-            if self._ping("-B-" + eligible):
-                break
-            else:
+            if self._ping("-B-%d" % eligible):
                 eligible += 1
+            else: # Slot is available
+                break
         else:
+            print("Ran out of sems")
             return False
 
         try:
             self._channel.queue_declare(
-                queue=self.name + "-B-" + eligible,
+                queue="%s-B-%d" % (self.name, eligible),
                 durable=False,
                 exclusive=True,
                 auto_delete=False,
@@ -39,7 +40,7 @@ class Semaphore(rabbitlock.mutex._InternalMutex):
             if self.paranoid and not self.slept:
                 self.slept = True
                 time.sleep(10.0 / random.randrange(75))
-                # TODO logging, maximum recursion count.
+            # TODO logging, maximum recursion count.
             # TODO optimize: start trying to acquire at $eligible, only loop around if it doesn't exist.
             return self._acquire_semaphore()
         else:
@@ -81,16 +82,23 @@ class Semaphore(rabbitlock.mutex._InternalMutex):
 
     def _increment_semaphore(self, max, count):
         for num in range(1, count + 1):
-            self._channel.queue_declare("%s-A-%d" % (self.name, max + num))
+            self._channel.queue_declare(
+                queue="%s-A-%d" % (self.name, max + num),
+                durable=False,
+                arguments={
+                    "x-max-length": 0,
+                }
+            )
 
     def adjust_semaphore(self, num):
         success = False
         try:
             if self._ensure_mutex_acquired():
+                max = self._get_max_semaphore()
                 if num > 0:
-                    self._increment_semaphore(self._get_max_semaphore(), num)
-                else:
-                    self._decrement_semaphore(self._get_max_semaphore(), abs(num))
+                    self._increment_semaphore(max, num)
+                elif max > 0: # Don't bother decrementing if there are no slots.
+                    self._decrement_semaphore(max, abs(num))
                 success = True
         finally:
             self._ensure_mutex_released()
@@ -117,7 +125,7 @@ class Semaphore(rabbitlock.mutex._InternalMutex):
             self._channel.queue_delete("%s-B-%d" % (self.name, num))
         finally:
             if self.paranoid:
-                self.clear_channel()
+                self._clear_channel()
 
     def __del__(self):
         if self.release_on_destroy:

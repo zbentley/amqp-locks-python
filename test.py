@@ -7,8 +7,12 @@ import argparse
 sys.path.append("lib")
 from rabbitlock.mutex import Mutex
 from rabbitlock.semaphore import Semaphore
-import cProfile
 
+def positive_float(value):
+    retval = float(value)
+    if retval < 0:
+         raise argparse.ArgumentTypeError("%s not a positive float" % value)
+    return retval
 
 # http://www.huyng.com/posts/python-performance-analysis/
 class Timer(object):
@@ -26,14 +30,12 @@ class Timer(object):
         if self.verbose:
             print('elapsed time: %f ms' % self.msecs)
 
+
 def get_connection_parameters():
     # return cluster_utils.get_connection_parameters()
 
-    return pika.ConnectionParameters("localhost",
-                                     5672,
-                                     "/",
-                                     pika.PlainCredentials("guest", "guest")
-                                     )
+    return pika.ConnectionParameters("localhost", 5672, "/", pika.PlainCredentials("guest", "guest"))
+
 
 def true_mutex_operations(args):
     print(args)
@@ -46,10 +48,11 @@ def true_mutex_operations(args):
             print("Got lock")
         else:
             print("Lost lock")
-        if args.loop:
-            time.sleep(0.5)
-        else:
+
+        time.sleep(args.sleep)
+        if not args.loop:
             break
+
 
 def semaphore_operations(args):
     lock = Semaphore("foo", get_connection_parameters())
@@ -60,20 +63,25 @@ def semaphore_operations(args):
         if args.loop:
             pass
         else:
-            acquired = False
             with Timer() as t:
                 acquired = lock.ensure_semaphore_held()
             if acquired:
-                print("Got lock: " + acquired)
+                print("Got lock: %d" % acquired)
             else:
                 print("Could not get lock")
+            time.sleep(args.sleep)
     elif args.change:
-        lock.adjust_semaphore(args.change)
+        if lock.adjust_semaphore(args.change):
+            print("Adjustment success")
+        else:
+            print("Adjustment failure")
 
-def parse_args(args):
+
+def parse_and_dispatch(args):
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
-    parser.add_argument("--time", action="store_true")
+    parser.add_argument("--profile", action="store_true")
+    parser.add_argument("--sleep", type=positive_float, default=0.5)
 
     semparser = subparsers.add_parser("semaphore")
     semparser.set_defaults(func=semaphore_operations)
@@ -90,7 +98,7 @@ def parse_args(args):
     truemutexparser.add_argument("--acquire", action="store_true", default=True)
     truemutexparser.add_argument("--loop", action="store_true")
 
-    return parser.parse_args(args)
+    result = parser.parse_args(args)
+    result.func(result)
 
-args = parse_args(sys.argv[1:])
-args.func(args)
+parse_and_dispatch(sys.argv[1:])

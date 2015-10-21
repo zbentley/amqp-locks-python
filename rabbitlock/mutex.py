@@ -10,7 +10,7 @@ class _SingleChannelConnection(object):
     def _get_channel(self):
         if self._channel_internal is not None:
             if not self._channel_internal.is_open or not self._connection.is_open:
-                self.clear_channel()
+                self._clear_channel()
         if self._channel_internal is None:
             print("Connecting")
             self._connection = pika.BlockingConnection(self.parameters)
@@ -28,13 +28,13 @@ class _SingleChannelConnection(object):
                 self._channel_internal.close()
             except:
                 pass
-            self._channel_internal = None
         if self._connection is not None and self._connection.is_open:
             try:
                 self._connection.close()
             except pika.exceptions.ConnectionClosed as e:
                 if e.args[0] != 302:  # CONNECTION_FORCED
                     raise
+        self._channel_internal = None
 
     _channel = property(_get_channel, _set_channel, _clear_channel)
 
