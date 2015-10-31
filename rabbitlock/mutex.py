@@ -12,7 +12,6 @@ class _SingleChannelConnection(object):
             if not self._channel_internal.is_open or not self._connection.is_open:
                 self._clear_channel()
         if self._channel_internal is None:
-            print("Connecting")
             self._connection = pika.BlockingConnection(self.parameters)
             self._set_channel(self._connection.channel())
         return self._channel_internal

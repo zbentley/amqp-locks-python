@@ -15,7 +15,6 @@ class Semaphore(rabbitlock.mutex._InternalMutex):
             else: # Slot is available
                 break
         else:
-            print("Ran out of sems")
             return False
 
         try:
@@ -62,7 +61,7 @@ class Semaphore(rabbitlock.mutex._InternalMutex):
 
     def _verify_semaphore_held(self):
         if not self._semaphore_exists(self._held_semaphore()):
-            self.release_semaphore()
+            self.ensure_semaphore_released()
         return self._held_semaphore()
 
     def _get_max_semaphore(self, overshoot=0):

@@ -7,3 +7,4 @@
 - Overshoot support in GetMaxSemaphore. Because things go wrong.
 - Race condition wraparound support: if race, continue at most recent slot, then wrap around.
 - Race condition maximum recursion count.
+- Max-sleep width. Default 0.75sec.
