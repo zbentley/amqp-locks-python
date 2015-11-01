@@ -104,7 +104,6 @@ def semaphore_operations(args):
 def parse_and_dispatch(args):
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
-    parser.add_argument("--profile", action="store_true")
     parser.add_argument("--sleep", type=positive_float, default=0.5)
     parser.add_argument("--verbose", action="store_true")
 
