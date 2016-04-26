@@ -118,11 +118,13 @@ class Semaphore(rabbitlock.mutex._InternalMutex):
     def ensure_semaphore_released(self):
         num = self._held_semaphore()
         self._remove_held_lock(num)
-        try:
-            self._channel.queue_delete("%s-B-%d" % (self.name, num))
-        finally:
-            if self.paranoid:
-                self._clear_channel()
+
+        if num is not None:
+            try:
+                self._channel.queue_delete("%s-B-%d" % (self.name, num))
+            finally:
+                if self.paranoid:
+                    self._clear_channel()
 
     def __del__(self):
         if self.release_on_destroy:
